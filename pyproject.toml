@@ -6,6 +6,7 @@ authors = [{ name = "Paul Dresch" }]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "croniter>=6.0.0",
     "gitpython>=3.1.45",
     "pydantic>=2.11.7",
     "python-dotenv>=1.1.1",

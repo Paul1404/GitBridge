@@ -1,6 +1,9 @@
 import typer
 import os
+import time
 import subprocess
+from datetime import datetime
+from croniter import croniter
 from settings import load_settings
 from git_utils import clone_or_fetch
 from logger import setup_logger
@@ -10,7 +13,6 @@ log = setup_logger()
 
 
 def run_cmd(cmd, cwd=None, env=None):
-    """Run a shell command and return (exit_code, stdout, stderr)."""
     result = subprocess.run(
         cmd,
         shell=True,
@@ -37,45 +39,62 @@ def fetch():
 
 
 @app.command()
-def mirror():
+def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwrite target history)")):
     """Mirror Repo1 (source) into Repo2 (target)"""
     settings = load_settings()
 
     repo1_dir = "/data/repo1"
     repo2_dir = "/data/repo2"
 
-    # Step 1: Clone/fetch Repo1
     log.info(f"[Repo1] Cloning source repo: {settings.repo1.url}")
     ok, msg = clone_or_fetch(repo1_dir, settings.repo1.url)
     log.info(f"[Repo1] {msg}")
 
-    # Step 2: Clone/fetch Repo2 (target)
     log.info(f"[Repo2] Cloning target repo: {settings.repo2.url}")
     ok, msg = clone_or_fetch(repo2_dir, settings.repo2.url)
     log.info(f"[Repo2] {msg}")
 
-    # Step 3: Add Repo2 as remote to Repo1
     log.info("[Mirror] Adding target as remote to source")
     code, out, err = run_cmd(f"git remote add target {settings.repo2.url}", cwd=repo1_dir)
     if code != 0 and "already exists" not in err:
         log.error(f"[Mirror] Failed to add remote: {err}")
         raise typer.Exit(code)
 
-    # Step 4: Push all branches
-    log.info("[Mirror] Pushing all branches from source to target")
-    code, out, err = run_cmd("git push --all target", cwd=repo1_dir)
-    if code != 0:
-        log.error(f"[Mirror] Failed to push branches: {err}")
-        raise typer.Exit(code)
-
-    # Step 5: Push all tags
-    log.info("[Mirror] Pushing all tags from source to target")
-    code, out, err = run_cmd("git push --tags target", cwd=repo1_dir)
-    if code != 0:
-        log.error(f"[Mirror] Failed to push tags: {err}")
-        raise typer.Exit(code)
+    push_flags = "--mirror" if force else "--all target"
+    log.info(f"[Mirror] Pushing branches (force={force})")
+    run_cmd(f"git push {push_flags}", cwd=repo1_dir)
+    run_cmd("git push --tags target", cwd=repo1_dir)
 
     log.info("[Mirror] Repo1 successfully mirrored into Repo2")
+
+
+@app.command()
+def run():
+    """Run GitBridge once or on a schedule"""
+    mode = os.getenv("GITBRIDGE_MODE", "fetch")
+    schedule_expr = os.getenv("GITBRIDGE_SCHEDULE")
+
+    def job():
+        log.info(f"Running GitBridge in {mode} mode")
+        if mode == "mirror":
+            mirror()
+        else:
+            fetch()
+
+    if schedule_expr:
+        log.info(f"Scheduling GitBridge with cron expression: {schedule_expr}")
+        base_time = datetime.now()
+        itr = croniter(schedule_expr, base_time)
+
+        while True:
+            next_time = itr.get_next(datetime)
+            sleep_seconds = (next_time - datetime.now()).total_seconds()
+            if sleep_seconds > 0:
+                log.info(f"Next run at {next_time} (sleeping {int(sleep_seconds)}s)")
+                time.sleep(sleep_seconds)
+            job()
+    else:
+        job()
 
 
 if __name__ == "__main__":
