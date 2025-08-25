@@ -8,14 +8,12 @@
 [![Latest Release](https://img.shields.io/github/v/release/Paul1404/GitBridge?logo=github)](https://github.com/Paul1404/GitBridge/releases)
 [![SBOM](https://img.shields.io/badge/SBOM-Available-success?logo=dependabot)](https://github.com/Paul1404/GitBridge/releases/latest)
 
-**GitBridge** is a lightweight containerized tool that **fetches two Git repositories** into mounted volumes, with support for multiple authentication methods (SSH, PAT, password, or none).  
+**GitBridge** is a containerized tool for working with two Git repositories.  
+It supports:  
 
-It is designed for **production use** with:  
-- Built on **Red Hat UBI 9 Python 3.12**  
-- Dependencies managed with **uv**  
-- Automated **CI/CD pipeline** with **semantic‑release**  
-- **Multi‑arch images** (amd64 + arm64) published to [Quay.io](https://quay.io/repository/scaling4840/gitbridge)  
-- **Trivy vulnerability scan** + **SBOMs (CycloneDX + SPDX)** attached to every GitHub Release  
+- **Fetch mode** → clone/fetch both repositories into `/data/repo1` and `/data/repo2`.  
+- **Mirror mode** → treat **Repo1 as the source** and **push all branches and tags into Repo2**.  
+- **Scheduled mode** → run fetch or mirror on a cron‑like schedule (`GITBRIDGE_SCHEDULE`).  
 
 ---
 
@@ -23,23 +21,24 @@ It is designed for **production use** with:
 
 - 🔑 Supports **SSH keys, PATs, passwords, or no auth**  
 - 📦 Fetches/clones into `/data/repo1` and `/data/repo2`  
+- 🔄 Mirror mode: push all branches + tags from Repo1 → Repo2  
+- ⏰ Built‑in scheduler with **full cron expression support** (`0 2 * * *`)  
 - 📝 Structured logging with **Rich**  
-- ⚡ Multi‑arch builds (x86_64 + ARM64)  
-- 🔒 Security scanning with **Trivy**  
-- 📑 SBOM generation (CycloneDX + SPDX) for compliance and visibility  
+- ⚡ Multi‑arch images (x86_64 + ARM64) published to [Quay.io](https://quay.io/repository/scaling4840/gitbridge)  
+- 📑 SBOMs (CycloneDX + SPDX) attached to every GitHub Release  
 
 ---
 
 ## 🛠️ Environment Variables
 
-### Repo 1
+### Repo 1 (Source)
 - `GITBRIDGE_REPO1_URL` → Git URL (required)  
 - `GITBRIDGE_REPO1_AUTH` → `ssh|pat|password|none` (default: `none`)  
 - `GITBRIDGE_REPO1_USER` → Username (if PAT/password)  
 - `GITBRIDGE_REPO1_PASS` → Password or PAT  
 - `GITBRIDGE_REPO1_SSH_KEY` → Private SSH key  
 
-### Repo 2
+### Repo 2 (Target)
 - `GITBRIDGE_REPO2_URL` → Git URL (required)  
 - `GITBRIDGE_REPO2_AUTH` → `ssh|pat|password|none` (default: `none`)  
 - `GITBRIDGE_REPO2_USER` → Username (if PAT/password)  
@@ -48,6 +47,12 @@ It is designed for **production use** with:
 
 ### Logging
 - `GITBRIDGE_LOG_LEVEL` → `info|debug|warn|error` (default: `info`)  
+
+### Scheduling
+- `GITBRIDGE_MODE` → `fetch` or `mirror` (default: `fetch`)  
+- `GITBRIDGE_SCHEDULE` → cron expression (e.g. `0 2 * * *` for daily at 2 AM).  
+  - If unset → runs once and exits.  
+  - If set → runs continuously on schedule.  
 
 ---
 
@@ -69,35 +74,54 @@ docker pull quay.io/scaling4840/gitbridge:v1.0.0
 
 ## ▶️ Usage
 
-### Run with Docker
+### Fetch Mode (default)
+
+Clone/fetch both repos into `/data/repo1` and `/data/repo2`:
 
 ```bash
 docker run --rm \
   -v $(pwd)/data:/data \
   -e GITBRIDGE_REPO1_URL=git@github.com:paul/repo1.git \
-  -e GITBRIDGE_REPO1_AUTH=ssh \
-  -e GITBRIDGE_REPO1_SSH_KEY="$(cat ~/.ssh/id_rsa)" \
   -e GITBRIDGE_REPO2_URL=https://github.com/paul/repo2.git \
-  -e GITBRIDGE_REPO2_AUTH=pat \
-  -e GITBRIDGE_REPO2_USER=paul \
-  -e GITBRIDGE_REPO2_PASS=ghp_xxx \
   quay.io/scaling4840/gitbridge:latest fetch
-```
-
-After running, you’ll have:
-
-```
-./data/repo1/.git
-./data/repo2/.git
 ```
 
 ---
 
-### Run with Docker Compose
+### Mirror Mode (Repo1 → Repo2)
 
-Create a `docker-compose.yml`:
+Treat Repo1 as the **source** and push all branches + tags into Repo2:
+
+```bash
+docker run --rm \
+  -v $(pwd)/data:/data \
+  -e GITBRIDGE_REPO1_URL=git@github.com:paul/repo1.git \
+  -e GITBRIDGE_REPO2_URL=https://github.com/paul/repo2.git \
+  quay.io/scaling4840/gitbridge:latest mirror
+```
+
+---
+
+### Scheduled Mode (with cron expression)
+
+Run mirror every day at 2 AM:
+
+```bash
+docker run -d \
+  -v $(pwd)/data:/data \
+  -e GITBRIDGE_MODE=mirror \
+  -e GITBRIDGE_REPO1_URL=git@github.com:paul/repo1.git \
+  -e GITBRIDGE_REPO2_URL=https://github.com/paul/repo2.git \
+  -e GITBRIDGE_SCHEDULE="0 2 * * *" \
+  quay.io/scaling4840/gitbridge:latest run
+```
+
+---
+
+### Docker Compose Example (Inline Environment Variables)
 
 ```yaml
+version: "3.9"
 services:
   gitbridge:
     image: quay.io/scaling4840/gitbridge:latest
@@ -105,7 +129,7 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # Repo 1
+      # Source repo
       GITBRIDGE_REPO1_URL: git@github.com:paul/repo1.git
       GITBRIDGE_REPO1_AUTH: ssh
       GITBRIDGE_REPO1_SSH_KEY: |
@@ -113,7 +137,7 @@ services:
         MIIEogIBAAKCAQEAw...
         -----END OPENSSH PRIVATE KEY-----
 
-      # Repo 2
+      # Target repo
       GITBRIDGE_REPO2_URL: https://github.com/paul/repo2.git
       GITBRIDGE_REPO2_AUTH: pat
       GITBRIDGE_REPO2_USER: paul
@@ -121,46 +145,18 @@ services:
 
       # Logging
       GITBRIDGE_LOG_LEVEL: info
-    command: ["fetch"]
+
+      # Scheduling
+      GITBRIDGE_MODE: mirror
+      GITBRIDGE_SCHEDULE: "0 2 * * *"
+    command: ["run"]
 ```
 
----
-
-### Example `.env`
-
-```dotenv
-# Repo 1
-GITBRIDGE_REPO1_URL=git@github.com:paul/repo1.git
-GITBRIDGE_REPO1_AUTH=ssh
-GITBRIDGE_REPO1_SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----
-MIIEogIBAAKCAQEAw...
------END OPENSSH PRIVATE KEY-----
-
-# Repo 2
-GITBRIDGE_REPO2_URL=https://github.com/paul/repo2.git
-GITBRIDGE_REPO2_AUTH=pat
-GITBRIDGE_REPO2_USER=paul
-GITBRIDGE_REPO2_PASS=ghp_xxx
-
-# Logging
-GITBRIDGE_LOG_LEVEL=info
-```
-
-⚠️ **Important:**  
-- Never commit `.env` files with secrets to Git!  
-- Add `.env` to your `.gitignore`.  
-
----
-
-### Run with Compose
+Run it:
 
 ```bash
-docker compose up
+docker compose up -d
 ```
-
-This will:  
-- Load secrets from `.env`  
-- Fetch both repos into `./data/repo1` and `./data/repo2`  
 
 ---
 
@@ -170,14 +166,14 @@ This will:
 - Dependencies pinned via `uv.lock`  
 - Every release includes:  
   - 📑 `CHANGELOG.md`  
-  - 🔒 Trivy vulnerability scan results (SARIF)  
   - 📦 SBOMs in **CycloneDX** and **SPDX** formats  
 
 ---
 
 ## ✅ Summary
 
-- **GitBridge** fetches two Git repos into `/data/repo1` and `/data/repo2`  
-- **Automated pipeline** ensures every commit → new release → new Quay image  
-- **Security built‑in**: Trivy scans + SBOMs for compliance and visibility  
-- **Easy to run**: via `docker run` or `docker compose` with `.env` support  
+- **Fetch mode** → clone/fetch both repos into `/data/repo1` and `/data/repo2`  
+- **Mirror mode** → push all branches + tags from Repo1 into Repo2  
+- **Scheduled mode** → run fetch/mirror on a cron schedule (`GITBRIDGE_SCHEDULE`)  
+- **Images published to Quay** with `latest`, `vX.Y.Z`, and `sha-<commit>` tags  
+- **SBOMs included** in every GitHub Release  
