@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/Paul1404/GitBridge/compare/v1.3.1...v1.4.0) (2025-08-25)
+
+### Features
+
+- enhance mirror functionality and improve logging for GitBridge operations (2f1c3ff)
+
 ## [1.3.1](https://github.com/Paul1404/GitBridge/compare/v1.3.0...v1.3.1) (2025-08-25)
 
 ### Bug Fixes
