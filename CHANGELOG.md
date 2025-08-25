@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/Paul1404/GitBridge/compare/v1.4.0...v1.5.0) (2025-08-25)
+
+### Features
+
+- enhance command logging and error handling, improve masking of sensitive output (622ab0d)
+
 ## [1.4.0](https://github.com/Paul1404/GitBridge/compare/v1.3.1...v1.4.0) (2025-08-25)
 
 ### Features
