@@ -20,15 +20,16 @@ def run_git_command(cmd, cwd=None, env=None):
     if result.returncode == 0:
         if result.stdout.strip():
             log.info(f"[GIT] Success: {result.stdout.strip()}")
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
+        return True, result.stdout.strip() or "Success"
     else:
         log.error(f"[GIT] Failed (exit {result.returncode}): {result.stderr.strip()}")
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
+        return False, result.stderr.strip() or "Unknown error"
 
 
 def clone_or_fetch(target_dir, url, auth_type="none", user=None, password=None, ssh_key=None):
     """
     Clone or fetch a repo into target_dir with support for SSH, PAT, password, or none.
+    Returns: (ok: bool, msg: str)
     """
 
     # If repo already exists → fetch
