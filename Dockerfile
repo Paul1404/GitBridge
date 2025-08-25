@@ -1,5 +1,5 @@
 # Builder stage
-FROM registry.access.redhat.com/ubi10/python-312:latest AS builder
+FROM registry.access.redhat.com/ubi9/python-312:latest AS builder
 
 # Install curl + git + ssh
 USER root
@@ -22,7 +22,7 @@ COPY gitbridge.py git_utils.py logger.py settings.py /app/
 RUN uv sync --frozen
 
 # Runtime stage
-FROM registry.access.redhat.com/ubi10/python-312:latest
+FROM registry.access.redhat.com/ubi9/python-312:latest
 
 USER root
 RUN microdnf install -y git openssh-clients \
