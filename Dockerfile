@@ -2,7 +2,7 @@
 FROM registry.access.redhat.com/ubi9/python-312:latest AS builder
 
 USER root
-RUN dnf install -y curl git openssh-clients \
+RUN dnf install -y git openssh-clients \
     && dnf clean all
 
 # Install uv (single binary)
