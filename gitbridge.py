@@ -95,7 +95,7 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
     )
     log.info(f"[Repo1] {msg}")
 
-    # Step 2: Clone/fetch Repo2
+    # Step 2: Clone/fetch Repo2 (just to validate access)
     ok, msg = clone_or_fetch(
         repo2_dir,
         settings.repo2.url,
@@ -106,19 +106,30 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
     )
     log.info(f"[Repo2] {msg}")
 
-    # Step 3: Add Repo2 as remote to Repo1
+    # Step 3: Build authenticated URL for Repo2
+    target_url = settings.repo2.url
+    if settings.repo2.auth in ["pat", "password"] and settings.repo2.password:
+        user = settings.repo2.user or "oauth2"
+        target_url = target_url.replace("https://", f"https://{user}:{settings.repo2.password}@")
+        masked_url = target_url.replace(settings.repo2.password, "******")
+        log.info(f"[Mirror] Using authenticated target URL: {masked_url}")
+    elif settings.repo2.auth == "ssh" and settings.repo2.ssh_key:
+        log.info("[Mirror] Using SSH key for target remote")
+
+    # Step 4: Add Repo2 as remote to Repo1 (with credentials)
     log.info("[Mirror] Adding target as remote to source")
     try:
-        run_cmd(f"git remote add target {settings.repo2.url}", cwd=repo1_dir)
-    except typer.Exit:
-        log.warning("[Mirror] Remote already exists, continuing")
+        run_cmd(f"git remote remove target", cwd=repo1_dir)
+    except Exception:
+        pass  # ignore if it doesn't exist
+    run_cmd(f"git remote add target {target_url}", cwd=repo1_dir, mask_output=True)
 
-    # Step 4: Push all branches
+    # Step 5: Push all branches
     push_flags = "--mirror" if force else "--all target"
     log.info(f"[Mirror] Pushing branches (force={force}) with flags: {push_flags}")
     run_cmd(f"git push {push_flags}", cwd=repo1_dir, mask_output=True)
 
-    # Step 5: Push all tags
+    # Step 6: Push all tags
     log.info("[Mirror] Pushing tags")
     run_cmd("git push --tags target", cwd=repo1_dir, mask_output=True)
 
