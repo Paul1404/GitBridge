@@ -1,3 +1,10 @@
+## 🚀 Release 1.1.0 (2025-08-25)
+
+
+### Features
+
+- implement fetch and mirror commands for repository management (447956a)
+
 ## 🚀 Release 1.0.8 (2025-08-25)
 
 ## 🚀 Release 1.0.7 (2025-08-25)
