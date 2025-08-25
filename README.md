@@ -1,5 +1,13 @@
 # 📖 GitBridge
 
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://www.python.org/downloads/release/python-3120/)
+[![Docker](https://img.shields.io/badge/Docker-Container-blue?logo=docker)](https://www.docker.com/)
+[![Red Hat UBI](https://img.shields.io/badge/Red_Hat_UBI-9-red?logo=redhat)](https://www.redhat.com/en/technologies/containers/ubi)
+[![License](https://img.shields.io/github/license/Paul1404/GitBridge?logo=github)](./LICENSE)
+[![Quay](https://img.shields.io/badge/Quay.io-GitBridge-blue?logo=redhat)](https://quay.io/repository/scaling4840/gitbridge)
+[![Latest Release](https://img.shields.io/github/v/release/Paul1404/GitBridge?logo=github)](https://github.com/Paul1404/GitBridge/releases)
+[![SBOM](https://img.shields.io/badge/SBOM-Available-success?logo=dependabot)](https://github.com/Paul1404/GitBridge/releases/latest)
+
 **GitBridge** is a lightweight containerized tool that **fetches two Git repositories** into mounted volumes, with support for multiple authentication methods (SSH, PAT, password, or none).  
 
 It is designed for **production use** with:  

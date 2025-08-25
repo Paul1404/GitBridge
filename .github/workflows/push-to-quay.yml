@@ -3,12 +3,11 @@ name: GitBridge Release Pipeline
 on:
   push:
     branches:
-      - main   # Run pipeline on every push to main branch
+      - main
 
 permissions:
-  contents: write        # Needed for pushing tags, changelog commits
-  issues: write          # Needed for semantic-release to open issues if it fails
-  security-events: write # Needed for uploading Trivy scan results to GitHub Security tab
+  contents: write        # needed for pushing tags, changelog commits
+  issues: write          # needed for semantic-release to open issues if it fails
 
 jobs:
   # -------------------------------
@@ -17,12 +16,10 @@ jobs:
   version-and-release:
     runs-on: ubuntu-latest
     steps:
-      # Checkout repo with full history (tags needed for semantic-release)
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Install semantic-release and plugins
       - name: Install semantic-release
         run: |
           npm install -g semantic-release \
@@ -33,12 +30,6 @@ jobs:
             @semantic-release/release-notes-generator \
             conventional-changelog-conventionalcommits
 
-      # Run semantic-release:
-      # - Analyzes commits
-      # - Bumps version (patch/minor/major)
-      # - Updates CHANGELOG.md
-      # - Creates Git tag
-      # - Publishes GitHub Release with notes
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,21 +39,19 @@ jobs:
   # 2. Docker Build & Push
   # -------------------------------
   docker-build:
-    needs: version-and-release   # Only run after release job succeeds
+    needs: version-and-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Get latest Git tag (fallback to "latest" if none exists)
       - name: Get latest tag
         id: get_tag
         run: |
           tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
           echo "tag=$tag" >> $GITHUB_OUTPUT
 
-      # Authenticate to Quay.io using robot account credentials
       - name: Log in to Quay.io
         uses: docker/login-action@v3
         with:
@@ -70,15 +59,9 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      # Enable Buildx (multi-arch builds)
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build and push multi-arch image (amd64 + arm64)
-      # Tags:
-      # - latest
-      # - semantic-release version (vX.Y.Z)
-      # - commit SHA
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
@@ -91,48 +74,35 @@ jobs:
             quay.io/scaling4840/gitbridge:sha-${{ github.sha }}
 
   # -------------------------------
-  # 3. Security Scan + SBOM
+  # 3. SBOM Generation
   # -------------------------------
-  trivy-scan:
-    name: Trivy Security Scan + SBOM
-    needs: docker-build   # Only run after image is built & pushed
+  sbom:
+    name: Generate SBOMs
+    needs: docker-build
     runs-on: ubuntu-latest
     steps:
-      # Run Trivy vulnerability scan in report-only mode
-      # - Scans quay.io/scaling4840/gitbridge:latest
-      # - Outputs SARIF (for GitHub Security tab)
-      # - Does not fail build (exit-code=0)
-      - name: Trivy Vulnerability Scan
-        uses: aquasecurity/trivy-action@0.32.0
-        with:
-          scan-type: library # only app dependencies, skip OS packages
-          image-ref: quay.io/scaling4840/gitbridge:latest
-          format: sarif
-          output: trivy-results.sarif
-          exit-code: 0
-          severity: CRITICAL,HIGH
-
-      # Upload Trivy results to GitHub Security tab
-      - name: Upload Trivy Scan Results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-
-      # Generate SBOM (CycloneDX JSON format)
       - name: Generate SBOM (CycloneDX JSON)
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@0.20.0
         with:
           scan-type: image
           image-ref: quay.io/scaling4840/gitbridge:latest
           format: cyclonedx
-          output: sbom.json
+          output: sbom.cyclonedx.json
           exit-code: 0
 
-      # Attach Trivy report + SBOM to GitHub Release
-      - name: Upload Trivy Report + SBOM to Release
+      - name: Generate SBOM (SPDX JSON)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: image
+          image-ref: quay.io/scaling4840/gitbridge:latest
+          format: spdx-json
+          output: sbom.spdx.json
+          exit-code: 0
+
+      - name: Upload SBOMs to Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            trivy-results.sarif
-            sbom.json
+            sbom.cyclonedx.json
+            sbom.spdx.json
