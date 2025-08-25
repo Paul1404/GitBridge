@@ -1,3 +1,10 @@
+## 🚀 Release 1.3.0 (2025-08-25)
+
+
+### Features
+
+- update README to clarify features and add scheduling details (7c98193)
+
 ## 🚀 Release 1.2.0 (2025-08-25)
 
 
