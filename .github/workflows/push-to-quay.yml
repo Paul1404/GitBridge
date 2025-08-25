@@ -102,7 +102,7 @@ jobs:
       # - Scans quay.io/scaling4840/gitbridge:latest
       # - Outputs SARIF (for GitHub Security tab)
       # - Does not fail build (exit-code=0)
-      - name: Install Trivy
+      - name: Trivy Vulnerability Scan
         uses: aquasecurity/trivy-action@0.20.0
         with:
           scan-type: image
@@ -120,8 +120,13 @@ jobs:
 
       # Generate SBOM (CycloneDX JSON format)
       - name: Generate SBOM (CycloneDX JSON)
-        run: |
-          trivy image --format cyclonedx --output sbom.json quay.io/scaling4840/gitbridge:latest
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: image
+          image-ref: quay.io/scaling4840/gitbridge:latest
+          format: cyclonedx
+          output: sbom.json
+          exit-code: 0
 
       # Attach Trivy report + SBOM to GitHub Release
       - name: Upload Trivy Report + SBOM to Release
