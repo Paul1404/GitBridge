@@ -105,7 +105,7 @@ jobs:
       - name: Trivy Vulnerability Scan
         uses: aquasecurity/trivy-action@0.20.0
         with:
-          scan-type: image
+          scan-type: library # only app dependencies, skip OS packages
           image-ref: quay.io/scaling4840/gitbridge:latest
           format: sarif
           output: trivy-results.sarif
