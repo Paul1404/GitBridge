@@ -30,7 +30,6 @@
         "preset": "conventionalcommits",
         "writerOpts": {
           "commitsSort": ["scope", "subject"],
-          "headerPartial": "## 🚀 Release {{version}} ({{date}})\n\n",
           "commitPartial": "- {{#if scope}}**{{scope}}:** {{/if}}{{subject}} ({{shortHash}})\n",
           "footerPartial": "\n📦 **Container Images:**\n- quay.io/scaling4840/gitbridge:{{version}}\n- quay.io/scaling4840/gitbridge:latest\n- quay.io/scaling4840/gitbridge:sha-{{commits.0.hash}}\n"
         }
