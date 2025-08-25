@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write   # allow pushing tags & creating releases
+  issues: write     # allow semantic-release to open issues if it fails
+
 jobs:
   version-and-release:
     name: Version, Build, Push, Release
