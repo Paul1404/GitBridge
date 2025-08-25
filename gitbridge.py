@@ -13,7 +13,7 @@ log = setup_logger()
 
 
 def mask_secret(value: str, keep_start: int = 4, keep_end: int = 2) -> str:
-    """Mask sensitive values like PATs or passwords."""
+    """Mask sensitive values like PATs or passwords for logging."""
     if not value:
         return ""
     if len(value) <= (keep_start + keep_end):
@@ -21,7 +21,8 @@ def mask_secret(value: str, keep_start: int = 4, keep_end: int = 2) -> str:
     return value[:keep_start] + "*" * (len(value) - (keep_start + keep_end)) + value[-keep_end:]
 
 
-def run_cmd(cmd, cwd=None, env=None):
+def run_cmd(cmd, cwd=None, env=None, mask_output=False):
+    """Run a shell command with logging and error handling."""
     log.info(f"[CMD] Running: {cmd} (cwd={cwd})")
     result = subprocess.run(
         cmd,
@@ -32,9 +33,14 @@ def run_cmd(cmd, cwd=None, env=None):
         env=env or os.environ.copy(),
     )
     if result.returncode == 0:
-        log.info(f"[CMD] Success: {result.stdout.strip()}")
+        if result.stdout.strip():
+            log.info(f"[CMD] Success: {result.stdout.strip()}")
     else:
-        log.error(f"[CMD] Failed (exit {result.returncode}): {result.stderr.strip()}")
+        err = result.stderr.strip()
+        if mask_output:
+            err = "[masked]"
+        log.error(f"[CMD] Failed (exit {result.returncode}): {err}")
+        raise typer.Exit(result.returncode)
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
@@ -44,11 +50,25 @@ def fetch():
     settings = load_settings()
 
     log.info(f"[Repo1] Fetching {settings.repo1.url}")
-    ok, msg = clone_or_fetch("/data/repo1", settings.repo1.url)
+    ok, msg = clone_or_fetch(
+        "/data/repo1",
+        settings.repo1.url,
+        settings.repo1.auth,
+        settings.repo1.user,
+        settings.repo1.password,
+        settings.repo1.ssh_key,
+    )
     log.info(f"[Repo1] {msg}")
 
     log.info(f"[Repo2] Fetching {settings.repo2.url}")
-    ok, msg = clone_or_fetch("/data/repo2", settings.repo2.url)
+    ok, msg = clone_or_fetch(
+        "/data/repo2",
+        settings.repo2.url,
+        settings.repo2.auth,
+        settings.repo2.user,
+        settings.repo2.password,
+        settings.repo2.ssh_key,
+    )
     log.info(f"[Repo2] {msg}")
 
 
@@ -65,30 +85,42 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
     log.info(f"[Mirror] Target repo: {settings.repo2.url}")
 
     # Step 1: Clone/fetch Repo1
-    log.info(f"[Repo1] Cloning source repo: {settings.repo1.url}")
-    ok, msg = clone_or_fetch(repo1_dir, settings.repo1.url)
+    ok, msg = clone_or_fetch(
+        repo1_dir,
+        settings.repo1.url,
+        settings.repo1.auth,
+        settings.repo1.user,
+        settings.repo1.password,
+        settings.repo1.ssh_key,
+    )
     log.info(f"[Repo1] {msg}")
 
     # Step 2: Clone/fetch Repo2
-    log.info(f"[Repo2] Cloning target repo: {settings.repo2.url}")
-    ok, msg = clone_or_fetch(repo2_dir, settings.repo2.url)
+    ok, msg = clone_or_fetch(
+        repo2_dir,
+        settings.repo2.url,
+        settings.repo2.auth,
+        settings.repo2.user,
+        settings.repo2.password,
+        settings.repo2.ssh_key,
+    )
     log.info(f"[Repo2] {msg}")
 
     # Step 3: Add Repo2 as remote to Repo1
     log.info("[Mirror] Adding target as remote to source")
-    code, out, err = run_cmd(f"git remote add target {settings.repo2.url}", cwd=repo1_dir)
-    if code != 0 and "already exists" not in err:
-        log.error(f"[Mirror] Failed to add remote: {err}")
-        raise typer.Exit(code)
+    try:
+        run_cmd(f"git remote add target {settings.repo2.url}", cwd=repo1_dir)
+    except typer.Exit:
+        log.warning("[Mirror] Remote already exists, continuing")
 
     # Step 4: Push all branches
     push_flags = "--mirror" if force else "--all target"
     log.info(f"[Mirror] Pushing branches (force={force}) with flags: {push_flags}")
-    run_cmd(f"git push {push_flags}", cwd=repo1_dir)
+    run_cmd(f"git push {push_flags}", cwd=repo1_dir, mask_output=True)
 
     # Step 5: Push all tags
     log.info("[Mirror] Pushing tags")
-    run_cmd("git push --tags target", cwd=repo1_dir)
+    run_cmd("git push --tags target", cwd=repo1_dir, mask_output=True)
 
     log.info("[Mirror] Repo1 successfully mirrored into Repo2")
 
@@ -109,10 +141,14 @@ def run():
 
     def job():
         log.info(f"[Job] Running GitBridge in {mode} mode")
-        if mode == "mirror":
-            mirror()
-        else:
-            fetch()
+        try:
+            if mode == "mirror":
+                mirror()
+            else:
+                fetch()
+        except Exception as e:
+            log.error(f"[Job] Exception during {mode}: {e}")
+            # Don’t crash scheduler, just log and continue
 
     if schedule_expr:
         log.info(f"[Scheduler] Using cron expression: {schedule_expr}")
@@ -120,12 +156,16 @@ def run():
         itr = croniter(schedule_expr, base_time)
 
         while True:
-            next_time = itr.get_next(datetime)
-            sleep_seconds = (next_time - datetime.now()).total_seconds()
-            if sleep_seconds > 0:
-                log.info(f"[Scheduler] Next run at {next_time} (sleeping {int(sleep_seconds)}s)")
-                time.sleep(sleep_seconds)
-            job()
+            try:
+                next_time = itr.get_next(datetime)
+                sleep_seconds = (next_time - datetime.now()).total_seconds()
+                if sleep_seconds > 0:
+                    log.info(f"[Scheduler] Next run at {next_time} (sleeping {int(sleep_seconds)}s)")
+                    time.sleep(sleep_seconds)
+                job()
+            except Exception as e:
+                log.error(f"[Scheduler] Exception in loop: {e}")
+                time.sleep(60)  # backoff before retry
     else:
         job()
 
