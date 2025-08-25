@@ -2,6 +2,10 @@
 FROM registry.access.redhat.com/ubi9/python-312:latest AS builder
 
 USER root
+
+RUN dnf remove -y subscription-manager || true \
+    && dnf clean all
+
 RUN dnf install -y git openssh-clients \
     && dnf clean all
 
