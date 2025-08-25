@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/Paul1404/GitBridge/compare/v1.5.0...v1.6.0) (2025-08-25)
+
+### Features
+
+- refactor clone_or_fetch to use subprocess for git commands and improve logging (3abcde6)
+
 ## [1.5.0](https://github.com/Paul1404/GitBridge/compare/v1.4.0...v1.5.0) (2025-08-25)
 
 ### Features
