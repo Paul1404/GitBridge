@@ -1,8 +1,10 @@
-FROM python:3.12-slim AS builder
+# Builder stage
+FROM registry.access.redhat.com/ubi10/python-312:latest AS builder
 
 # Install curl + git + ssh
-RUN apt-get update && apt-get install -y curl git openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+USER root
+RUN microdnf install -y curl git openssh-clients \
+    && microdnf clean all
 
 # Install uv (single binary)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -19,11 +21,12 @@ COPY gitbridge.py git_utils.py logger.py settings.py /app/
 # Install dependencies with uv
 RUN uv sync --frozen
 
-# Final runtime image
-FROM python:3.12-slim
+# Runtime stage
+FROM registry.access.redhat.com/ubi10/python-312:latest
 
-RUN apt-get update && apt-get install -y git openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+USER root
+RUN microdnf install -y git openssh-clients \
+    && microdnf clean all
 
 WORKDIR /app
 
