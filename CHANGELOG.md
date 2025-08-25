@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/Paul1404/GitBridge/compare/v1.3.0...v1.3.1) (2025-08-25)
+
+### Bug Fixes
+
+- remove headerPartial from release notes configuration (735338f)
+
 ## 🚀 Release 1.3.0 (2025-08-25)
 
 
