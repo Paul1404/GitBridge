@@ -3,31 +3,29 @@ name: GitBridge Release Pipeline
 on:
   push:
     branches:
-      - main
+      - main   # Run pipeline on every push to main branch
 
 permissions:
-  contents: write   # allow pushing tags & creating releases
-  issues: write     # allow semantic-release to open issues if it fails
+  contents: write        # Needed for pushing tags, changelog commits
+  issues: write          # Needed for semantic-release to open issues if it fails
+  security-events: write # Needed for uploading Trivy scan results to GitHub Security tab
 
 jobs:
+  # -------------------------------
+  # 1. Versioning & Release
+  # -------------------------------
   version-and-release:
-    name: Version, Build, Push, Release
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # Checkout repo with full history (tags needed for semantic-release)
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # required for semantic-release to see tags
+          fetch-depth: 0
 
-      - name: Set up Node.js (for semantic-release)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
+      # Install semantic-release and plugins
       - name: Install semantic-release
         run: |
-            npm install -g semantic-release \
+          npm install -g semantic-release \
             @semantic-release/git \
             @semantic-release/changelog \
             @semantic-release/github \
@@ -35,32 +33,36 @@ jobs:
             @semantic-release/release-notes-generator \
             conventional-changelog-conventionalcommits
 
+      # Run semantic-release:
+      # - Analyzes commits
+      # - Bumps version (patch/minor/major)
+      # - Updates CHANGELOG.md
+      # - Creates Git tag
+      # - Publishes GitHub Release with notes
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release
 
+  # -------------------------------
+  # 2. Docker Build & Push
+  # -------------------------------
   docker-build:
-    name: Build and Push Docker Image
-    needs: version-and-release
+    needs: version-and-release   # Only run after release job succeeds
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Get latest Git tag (fallback to "latest" if none exists)
       - name: Get latest tag
         id: get_tag
         run: |
-            tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$tag" ]; then
-            echo "tag=latest" >> $GITHUB_OUTPUT
-            else
-            echo "tag=$tag" >> $GITHUB_OUTPUT
-            fi
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
+          echo "tag=$tag" >> $GITHUB_OUTPUT
 
+      # Authenticate to Quay.io using robot account credentials
       - name: Log in to Quay.io
         uses: docker/login-action@v3
         with:
@@ -68,12 +70,15 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
+      # Enable Buildx (multi-arch builds)
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Build and push multi-arch image (amd64 + arm64)
+      # Tags:
+      # - latest
+      # - semantic-release version (vX.Y.Z)
+      # - commit SHA
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
@@ -84,3 +89,45 @@ jobs:
             quay.io/scaling4840/gitbridge:latest
             quay.io/scaling4840/gitbridge:${{ steps.get_tag.outputs.tag }}
             quay.io/scaling4840/gitbridge:sha-${{ github.sha }}
+
+  # -------------------------------
+  # 3. Security Scan + SBOM
+  # -------------------------------
+  trivy-scan:
+    name: Trivy Security Scan + SBOM
+    needs: docker-build   # Only run after image is built & pushed
+    runs-on: ubuntu-latest
+    steps:
+      # Run Trivy vulnerability scan in report-only mode
+      # - Scans quay.io/scaling4840/gitbridge:latest
+      # - Outputs SARIF (for GitHub Security tab)
+      # - Does not fail build (exit-code=0)
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: image
+          image-ref: quay.io/scaling4840/gitbridge:latest
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      # Upload Trivy results to GitHub Security tab
+      - name: Upload Trivy Scan Results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # Generate SBOM (CycloneDX JSON format)
+      - name: Generate SBOM (CycloneDX JSON)
+        run: |
+          trivy image --format cyclonedx --output sbom.json quay.io/scaling4840/gitbridge:latest
+
+      # Attach Trivy report + SBOM to GitHub Release
+      - name: Upload Trivy Report + SBOM to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            trivy-results.sarif
+            sbom.json
