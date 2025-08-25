@@ -1,10 +1,9 @@
 # Builder stage
 FROM registry.access.redhat.com/ubi9/python-312:latest AS builder
 
-# Install curl + git + ssh
 USER root
-RUN microdnf install -y curl git openssh-clients \
-    && microdnf clean all
+RUN dnf install -y curl git openssh-clients \
+    && dnf clean all
 
 # Install uv (single binary)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -25,8 +24,8 @@ RUN uv sync --frozen
 FROM registry.access.redhat.com/ubi9/python-312:latest
 
 USER root
-RUN microdnf install -y git openssh-clients \
-    && microdnf clean all
+RUN dnf install -y git openssh-clients \
+    && dnf clean all
 
 WORKDIR /app
 
