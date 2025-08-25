@@ -103,7 +103,7 @@ jobs:
       # - Outputs SARIF (for GitHub Security tab)
       # - Does not fail build (exit-code=0)
       - name: Trivy Vulnerability Scan
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.32.0
         with:
           scan-type: library # only app dependencies, skip OS packages
           image-ref: quay.io/scaling4840/gitbridge:latest
@@ -120,7 +120,7 @@ jobs:
 
       # Generate SBOM (CycloneDX JSON format)
       - name: Generate SBOM (CycloneDX JSON)
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.32.0
         with:
           scan-type: image
           image-ref: quay.io/scaling4840/gitbridge:latest
