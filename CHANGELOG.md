@@ -1,3 +1,10 @@
+## 🚀 Release 1.2.0 (2025-08-25)
+
+
+### Features
+
+- enhance mirroring functionality and add scheduling support (6c0c7d7)
+
 ## 🚀 Release 1.1.0 (2025-08-25)
 
 
