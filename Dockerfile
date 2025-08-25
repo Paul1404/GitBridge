@@ -13,7 +13,7 @@ ENV PATH="/root/.local/bin:$PATH"
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml /app/
+COPY pyproject.toml uv.lock /app/
 COPY gitbridge.py git_utils.py logger.py settings.py /app/
 
 # Install dependencies with uv
