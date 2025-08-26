@@ -1,3 +1,9 @@
+## [1.9.4](https://github.com/Paul1404/GitBridge/compare/v1.9.3...v1.9.4) (2025-08-26)
+
+### Bug Fixes
+
+- update mirror function to use bare clone and force push for improved repo synchronization (9eaedd1)
+
 ## [1.9.3](https://github.com/Paul1404/GitBridge/compare/v1.9.2...v1.9.3) (2025-08-26)
 
 ### Bug Fixes
