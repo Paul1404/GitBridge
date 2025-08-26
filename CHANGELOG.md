@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/Paul1404/GitBridge/compare/v1.6.1...v1.7.0) (2025-08-25)
+
+### Features
+
+- enhance mirror command with authenticated URL handling and improved logging (e45171d)
+
 ## [1.6.1](https://github.com/Paul1404/GitBridge/compare/v1.6.0...v1.6.1) (2025-08-25)
 
 ### Bug Fixes
