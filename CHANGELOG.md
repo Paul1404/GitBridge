@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/Paul1404/GitBridge/compare/v1.7.1...v1.8.0) (2025-08-26)
+
+### Features
+
+- enhance logging and error handling in mirror command with output sanitization (f959385)
+
 ## [1.7.1](https://github.com/Paul1404/GitBridge/compare/v1.7.0...v1.7.1) (2025-08-26)
 
 ### Bug Fixes
