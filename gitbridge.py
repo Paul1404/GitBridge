@@ -2,6 +2,7 @@ import typer
 import os
 import time
 import subprocess
+import traceback
 from datetime import datetime
 from croniter import croniter
 from settings import load_settings
@@ -21,9 +22,20 @@ def mask_secret(value: str, keep_start: int = 4, keep_end: int = 2) -> str:
     return value[:keep_start] + "*" * (len(value) - (keep_start + keep_end)) + value[-keep_end:]
 
 
+def sanitize_output(text: str) -> str:
+    """Mask secrets in command output/logs."""
+    if not text:
+        return ""
+    # Mask common secret patterns
+    for keyword in ["glpat-", "token", "key", "pass", "oauth2:" ]:
+        if keyword.lower() in text.lower():
+            text = text.replace(text, "[******]")
+    return text
+
+
 def run_cmd(cmd, cwd=None, env=None, mask_output=False):
     """Run a shell command with logging and error handling."""
-    log.info(f"[CMD] Running: {cmd} (cwd={cwd})")
+    log.info(f"[CMD] START: {cmd} (cwd={cwd})")
     result = subprocess.run(
         cmd,
         shell=True,
@@ -32,22 +44,33 @@ def run_cmd(cmd, cwd=None, env=None, mask_output=False):
         capture_output=True,
         env=env or os.environ.copy(),
     )
+
+    stdout = sanitize_output(result.stdout.strip())
+    stderr = sanitize_output(result.stderr.strip())
+
     if result.returncode == 0:
-        if result.stdout.strip():
-            log.info(f"[CMD] Success: {result.stdout.strip()}")
+        log.info(f"[CMD] SUCCESS (exit=0): {cmd}")
+        if stdout:
+            log.info(f"[CMD][STDOUT]: {stdout}")
     else:
-        err = result.stderr.strip()
         if mask_output:
-            err = "[masked]"
-        log.error(f"[CMD] Failed (exit {result.returncode}): {err}")
+            stderr = "[masked]"
+        log.error(f"[CMD] FAILED (exit={result.returncode}): {cmd}")
+        if stdout:
+            log.error(f"[CMD][STDOUT]: {stdout}")
+        if stderr:
+            log.error(f"[CMD][STDERR]: {stderr}")
         raise typer.Exit(result.returncode)
-    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+    return result.returncode, stdout, stderr
 
 
 @app.command()
 def fetch():
     """Fetch/clone both repos into /data/repo1 and /data/repo2"""
     settings = load_settings()
+
+    log.info("[STEP] Fetching repositories")
 
     log.info(f"[Repo1] Fetching {settings.repo1.url}")
     ok, msg = clone_or_fetch(
@@ -71,6 +94,8 @@ def fetch():
     )
     log.info(f"[Repo2] {msg}")
 
+    log.info("[STEP] Fetch completed successfully")
+
 
 @app.command()
 def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwrite target history)")):
@@ -80,64 +105,70 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
     repo1_dir = "/data/repo1"
     repo2_dir = "/data/repo2"
 
-    log.info(f"[Mirror] Starting mirror operation (force={force})")
+    log.info(f"[STEP] Starting mirror operation (force={force})")
     log.info(f"[Mirror] Source repo: {settings.repo1.url}")
     log.info(f"[Mirror] Target repo: {settings.repo2.url}")
 
-    # Step 1: Clone/fetch Repo1
-    ok, msg = clone_or_fetch(
-        repo1_dir,
-        settings.repo1.url,
-        settings.repo1.auth,
-        settings.repo1.user,
-        settings.repo1.password,
-        settings.repo1.ssh_key,
-    )
-    log.info(f"[Repo1] {msg}")
-
-    # Step 2: Clone/fetch Repo2 (just to validate access)
-    ok, msg = clone_or_fetch(
-        repo2_dir,
-        settings.repo2.url,
-        settings.repo2.auth,
-        settings.repo2.user,
-        settings.repo2.password,
-        settings.repo2.ssh_key,
-    )
-    log.info(f"[Repo2] {msg}")
-
-    # Step 3: Build authenticated URL for Repo2
-    target_url = settings.repo2.url
-    if settings.repo2.auth in ["pat", "password"] and settings.repo2.password:
-        user = settings.repo2.user or "oauth2"
-        target_url = target_url.replace("https://", f"https://{user}:{settings.repo2.password}@")
-        masked_url = target_url.replace(settings.repo2.password, "******")
-        log.info(f"[Mirror] Using authenticated target URL: {masked_url}")
-    elif settings.repo2.auth == "ssh" and settings.repo2.ssh_key:
-        log.info("[Mirror] Using SSH key for target remote")
-
-    # Step 4: Add Repo2 as remote to Repo1 (with credentials)
-    log.info("[Mirror] Adding target as remote to source")
     try:
-        run_cmd(f"git remote remove target", cwd=repo1_dir)
-    except Exception:
-        pass  # ignore if it doesn't exist
-    run_cmd(f"git remote add target {target_url}", cwd=repo1_dir, mask_output=True)
+        # Step 1: Clone/fetch Repo1
+        ok, msg = clone_or_fetch(
+            repo1_dir,
+            settings.repo1.url,
+            settings.repo1.auth,
+            settings.repo1.user,
+            settings.repo1.password,
+            settings.repo1.ssh_key,
+        )
+        log.info(f"[Repo1] {msg}")
 
-    # Step 5: Push all branches
-    if force:
-        push_cmd = "git push --mirror target"
-    else:
-        push_cmd = "git push --all target"
+        # Step 2: Clone/fetch Repo2 (just to validate access)
+        ok, msg = clone_or_fetch(
+            repo2_dir,
+            settings.repo2.url,
+            settings.repo2.auth,
+            settings.repo2.user,
+            settings.repo2.password,
+            settings.repo2.ssh_key,
+        )
+        log.info(f"[Repo2] {msg}")
 
-    log.info(f"[Mirror] Pushing branches (force={force}) with cmd: {push_cmd}")
-    run_cmd(push_cmd, cwd=repo1_dir, mask_output=True)
+        # Step 3: Build authenticated URL for Repo2
+        target_url = settings.repo2.url
+        if settings.repo2.auth in ["pat", "password"] and settings.repo2.password:
+            user = settings.repo2.user or "oauth2"
+            target_url = target_url.replace(
+                "https://", f"https://{user}:{settings.repo2.password}@"
+            )
+            masked_url = target_url.replace(settings.repo2.password, "******")
+            log.info(f"[Mirror] Using authenticated target URL: {masked_url}")
+        elif settings.repo2.auth == "ssh" and settings.repo2.ssh_key:
+            log.info("[Mirror] Using SSH key for target remote")
 
-    # Step 6: Push all tags
-    log.info("[Mirror] Pushing tags")
-    run_cmd("git push --tags target", cwd=repo1_dir, mask_output=True)
+        # Step 4: Add Repo2 as remote to Repo1 (with credentials)
+        log.info("[Mirror] Adding target as remote to source")
+        try:
+            run_cmd("git remote remove target", cwd=repo1_dir)
+        except Exception:
+            log.warning("[Mirror] Remote 'target' did not exist, skipping removal")
+        run_cmd(f"git remote add target {target_url}", cwd=repo1_dir, mask_output=True)
 
-    log.info("[Mirror] Repo1 successfully mirrored into Repo2")
+        # Step 5: Push branches/tags
+        if force:
+            push_cmd = "git push --mirror target"
+            log.info(f"[Mirror] Pushing EVERYTHING (branches+tags, force overwrite)")
+            run_cmd(push_cmd, cwd=repo1_dir, mask_output=True)
+        else:
+            log.info("[Mirror] Pushing branches")
+            run_cmd("git push --all target", cwd=repo1_dir, mask_output=True)
+            log.info("[Mirror] Pushing tags")
+            run_cmd("git push --tags target", cwd=repo1_dir, mask_output=True)
+
+        log.info("[STEP] Mirror operation completed successfully")
+
+    except Exception as e:
+        log.error(f"[ERROR] Mirror operation failed: {e}")
+        log.error(traceback.format_exc())
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -163,6 +194,7 @@ def run():
                 fetch()
         except Exception as e:
             log.error(f"[Job] Exception during {mode}: {e}")
+            log.error(traceback.format_exc())
             # Don’t crash scheduler, just log and continue
 
     if schedule_expr:
@@ -175,11 +207,15 @@ def run():
                 next_time = itr.get_next(datetime)
                 sleep_seconds = (next_time - datetime.now()).total_seconds()
                 if sleep_seconds > 0:
-                    log.info(f"[Scheduler] Next run at {next_time} (sleeping {int(sleep_seconds)}s)")
+                    log.info(
+                        f"[Scheduler] Next run at {next_time} "
+                        f"(sleeping {int(sleep_seconds)}s)"
+                    )
                     time.sleep(sleep_seconds)
                 job()
             except Exception as e:
                 log.error(f"[Scheduler] Exception in loop: {e}")
+                log.error(traceback.format_exc())
                 time.sleep(60)  # backoff before retry
     else:
         job()
