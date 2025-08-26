@@ -1,3 +1,9 @@
+## [1.9.2](https://github.com/Paul1404/GitBridge/compare/v1.9.1...v1.9.2) (2025-08-26)
+
+### Bug Fixes
+
+- update tag retrieval in GitHub Actions workflow for Docker image and SBOM release (d30e0ae)
+
 ## [1.9.1](https://github.com/Paul1404/GitBridge/compare/v1.9.0...v1.9.1) (2025-08-26)
 
 ### Bug Fixes
