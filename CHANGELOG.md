@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/Paul1404/GitBridge/compare/v1.8.0...v1.9.0) (2025-08-26)
+
+### Features
+
+- enhance release process by adding Quay.io image links and tagging for SBOM uploads (dc470db)
+
 ## [1.8.0](https://github.com/Paul1404/GitBridge/compare/v1.7.1...v1.8.0) (2025-08-26)
 
 ### Features
