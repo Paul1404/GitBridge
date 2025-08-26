@@ -1,3 +1,9 @@
+## [1.7.1](https://github.com/Paul1404/GitBridge/compare/v1.7.0...v1.7.1) (2025-08-26)
+
+### Bug Fixes
+
+- improve mirror command push logic for clarity and correctness (d4d889a)
+
 ## [1.7.0](https://github.com/Paul1404/GitBridge/compare/v1.6.1...v1.7.0) (2025-08-25)
 
 ### Features
