@@ -156,7 +156,7 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
         if force:
             push_cmd = "git push --mirror target"
             log.info(f"[Mirror] Pushing EVERYTHING (branches+tags, force overwrite)")
-            run_cmd(push_cmd, cwd=repo1_dir, mask_output=True)
+            run_cmd(push_cmd, cwd=repo1_dir, mask_output=False)
         else:
             log.info("[Mirror] Pushing branches")
             run_cmd("git push --all target", cwd=repo1_dir, mask_output=False)
