@@ -1,3 +1,9 @@
+## [1.9.1](https://github.com/Paul1404/GitBridge/compare/v1.9.0...v1.9.1) (2025-08-26)
+
+### Bug Fixes
+
+- disable output masking for git push commands in mirror function (0820987)
+
 ## [1.9.0](https://github.com/Paul1404/GitBridge/compare/v1.8.0...v1.9.0) (2025-08-26)
 
 ### Features
