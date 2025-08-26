@@ -98,41 +98,29 @@ def fetch():
 
 
 @app.command()
-def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwrite target history)")):
-    """Mirror Repo1 (source) into Repo2 (target)"""
+def mirror():
+    """Mirror Repo1 (source) into Repo2 (target) with bare clone + force push"""
     settings = load_settings()
 
     repo1_dir = "/data/repo1"
-    repo2_dir = "/data/repo2"
 
-    log.info(f"[STEP] Starting mirror operation (force={force})")
+    log.info("[STEP] Starting mirror operation (bare clone + force push)")
     log.info(f"[Mirror] Source repo: {settings.repo1.url}")
     log.info(f"[Mirror] Target repo: {settings.repo2.url}")
 
     try:
-        # Step 1: Clone/fetch Repo1
-        ok, msg = clone_or_fetch(
-            repo1_dir,
-            settings.repo1.url,
-            settings.repo1.auth,
-            settings.repo1.user,
-            settings.repo1.password,
-            settings.repo1.ssh_key,
-        )
-        log.info(f"[Repo1] {msg}")
+        # Step 1: Ensure /data/repo1 is a bare clone of source
+        if os.path.exists(repo1_dir):
+            log.info(f"[Mirror] Removing existing repo1 at {repo1_dir}")
+            subprocess.run(f"rm -rf {repo1_dir}", shell=True, check=False)
 
-        # Step 2: Clone/fetch Repo2 (just to validate access)
-        ok, msg = clone_or_fetch(
-            repo2_dir,
-            settings.repo2.url,
-            settings.repo2.auth,
-            settings.repo2.user,
-            settings.repo2.password,
-            settings.repo2.ssh_key,
+        log.info(f"[Mirror] Cloning source as bare repo into {repo1_dir}")
+        run_cmd(
+            f"git clone --bare {settings.repo1.url} {repo1_dir}",
+            mask_output=True,
         )
-        log.info(f"[Repo2] {msg}")
 
-        # Step 3: Build authenticated URL for Repo2
+        # Step 2: Build authenticated URL for Repo2
         target_url = settings.repo2.url
         if settings.repo2.auth in ["pat", "password"] and settings.repo2.password:
             user = settings.repo2.user or "oauth2"
@@ -144,26 +132,18 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
         elif settings.repo2.auth == "ssh" and settings.repo2.ssh_key:
             log.info("[Mirror] Using SSH key for target remote")
 
-        # Step 4: Add Repo2 as remote to Repo1 (with credentials)
-        log.info("[Mirror] Adding target as remote to source")
-        try:
-            run_cmd("git remote remove target", cwd=repo1_dir)
-        except Exception:
-            log.warning("[Mirror] Remote 'target' did not exist, skipping removal")
+        # Step 3: Add target remote
+        log.info("[Mirror] Adding target remote to bare repo")
         run_cmd(f"git remote add target {target_url}", cwd=repo1_dir, mask_output=True)
 
-        # Step 5: Push branches/tags
-        if force:
-            push_cmd = "git push --mirror target"
-            log.info(f"[Mirror] Pushing EVERYTHING (branches+tags, force overwrite)")
-            run_cmd(push_cmd, cwd=repo1_dir, mask_output=False)
-        else:
-            log.info("[Mirror] Pushing branches")
-            run_cmd("git push --all target", cwd=repo1_dir, mask_output=False)
-            log.info("[Mirror] Pushing tags")
-            run_cmd("git push --tags target", cwd=repo1_dir, mask_output=False)
+        # Step 4: Force push all branches and tags
+        log.info("[Mirror] Force pushing all branches")
+        run_cmd("git push --all target --force", cwd=repo1_dir, mask_output=False)
 
-        log.info("[STEP] Mirror operation completed successfully")
+        log.info("[Mirror] Force pushing all tags")
+        run_cmd("git push --tags target --force", cwd=repo1_dir, mask_output=False)
+
+        log.info("[STEP] Mirror operation completed successfully (bare clone + force overwrite)")
 
     except Exception as e:
         log.error(f"[ERROR] Mirror operation failed: {e}")

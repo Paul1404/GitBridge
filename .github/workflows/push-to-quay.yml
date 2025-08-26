@@ -113,6 +113,6 @@ jobs:
           body: |
             ## Docker Images
 
-            - `quay.io/scaling4840/gitbridge:latest`
-            - `quay.io/scaling4840/gitbridge:${{ needs.docker-build.outputs.tag }}`
-            - `quay.io/scaling4840/gitbridge:sha-${{ github.sha }}`
+            - [quay.io/scaling4840/gitbridge:latest](https://quay.io/repository/scaling4840/gitbridge?tab=tags&tag=latest)
+            - [quay.io/scaling4840/gitbridge:${{ needs.docker-build.outputs.tag }}](https://quay.io/repository/scaling4840/gitbridge?tab=tags&tag=${{ needs.docker-build.outputs.tag }})
+            - [quay.io/scaling4840/gitbridge:sha-${{ github.sha }}](https://quay.io/repository/scaling4840/gitbridge?tab=tags&tag=sha-${{ github.sha }})
