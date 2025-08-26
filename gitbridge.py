@@ -125,9 +125,13 @@ def mirror(force: bool = typer.Option(False, "--force", help="Force push (overwr
     run_cmd(f"git remote add target {target_url}", cwd=repo1_dir, mask_output=True)
 
     # Step 5: Push all branches
-    push_flags = "--mirror" if force else "--all target"
-    log.info(f"[Mirror] Pushing branches (force={force}) with flags: {push_flags}")
-    run_cmd(f"git push {push_flags}", cwd=repo1_dir, mask_output=True)
+    if force:
+        push_cmd = "git push --mirror target"
+    else:
+        push_cmd = "git push --all target"
+
+    log.info(f"[Mirror] Pushing branches (force={force}) with cmd: {push_cmd}")
+    run_cmd(push_cmd, cwd=repo1_dir, mask_output=True)
 
     # Step 6: Push all tags
     log.info("[Mirror] Pushing tags")
