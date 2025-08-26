@@ -15,6 +15,8 @@ jobs:
   # -------------------------------
   version-and-release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,22 +37,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release
 
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+
   # -------------------------------
   # 2. Docker Build & Push
   # -------------------------------
   docker-build:
     needs: version-and-release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ needs.version-and-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Get latest tag
-        id: get_tag
-        run: |
-          tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
-          echo "tag=$tag" >> $GITHUB_OUTPUT
 
       - name: Log in to Quay.io
         uses: docker/login-action@v3
@@ -70,14 +74,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             quay.io/scaling4840/gitbridge:latest
-            quay.io/scaling4840/gitbridge:${{ steps.get_tag.outputs.tag }}
+            quay.io/scaling4840/gitbridge:${{ needs.version-and-release.outputs.tag }}
             quay.io/scaling4840/gitbridge:sha-${{ github.sha }}
 
   # -------------------------------
-  # 3. SBOM Generation
+  # 3. SBOM Generation + Release Update
   # -------------------------------
   sbom:
-    name: Generate SBOMs
+    name: Generate SBOMs & Update Release
     needs: docker-build
     runs-on: ubuntu-latest
     steps:
@@ -99,21 +103,16 @@ jobs:
           output: sbom.spdx.json
           exit-code: 0
 
-      - name: Upload SBOMs to Release
+      - name: Upload SBOMs + Update Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_tag.outputs.tag }}
+          tag_name: ${{ needs.docker-build.outputs.tag }}
           files: |
             sbom.cyclonedx.json
             sbom.spdx.json
-
-      - name: Add Quay.io image links to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.get_tag.outputs.tag }}
           body: |
             ## Docker Images
 
             - `quay.io/scaling4840/gitbridge:latest`
-            - `quay.io/scaling4840/gitbridge:${{ steps.get_tag.outputs.tag }}`
+            - `quay.io/scaling4840/gitbridge:${{ needs.docker-build.outputs.tag }}`
             - `quay.io/scaling4840/gitbridge:sha-${{ github.sha }}`
